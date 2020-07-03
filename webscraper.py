@@ -7,6 +7,7 @@ from models import *
 from bs4 import BeautifulSoup, Comment
 from time import sleep
 from datetime import datetime, timedelta
+from database import session
 
 HEADERS = {
     'user-agent': 'Daniel Foster/daniel.a.foster@gmail.com/Doing a home project'}
@@ -91,7 +92,7 @@ def parse_game_info(title, game_info_df, box_score_df, date, week):
         game_info_df, 'Unnamed: 1', 'Game Info', 'Attendance')
     vegas_line = get_row_value_where(
         game_info_df, 'Unnamed: 1', 'Game Info', 'Vegas Line')
-    vegas_line_num = re.sub('[^\d\+-', '', vegas_line)
+    vegas_line_num = re.sub('[^\d\+-]', '', vegas_line)
     vegas_line = re.sub('[^\w\s]+', '', vegas_line).strip()
     over_under = get_row_value_where(
         game_info_df, 'Unnamed: 1', 'Game Info', 'Over/Under')
@@ -155,9 +156,12 @@ def parse_game_info(title, game_info_df, box_score_df, date, week):
     scores = {"home_scoring": home_score, "away_scoring": away_score}
     game_info['ot'] = OT
     game_info['ot2'] = OT2
-    
-    return NFLGame(home_team, away_team, date, scores, game_info)
 
+    game = NFLGame(home_team, away_team, date, scores, game_info)
+    session.add(game)
+    session.commit() 
+
+    return game
 
 def remove_extra_table_headers(table):
     for tr in table.find_all('tr', {"class": "over_header"}):
@@ -211,13 +215,13 @@ def get_player_stats_kicking(row):
     fullname = row['player'].split(' ')
     first_name, last_name = split_name(fullname)
 
-    scoring = {"extra_points_made": row['xpm'], "extra_points_attempts": row['xpa'],
-               "fg_made": row['fgm'], "fg_attempts": row['fga']}
+    kicks = {"extra_points_made": row['xpm'], "extra_points_attempts": row['xpa'],
+             "fg_made": row['fgm'], "fg_attempts": row['fga']}
 
-    punting = {"punts": row['pnt'], "yards": row['yds'],
-               "yds_per_punt": row['yp'], "longest": row['lng']}
+    punts = {"punts": row['pnt'], "yards": row['yds'],
+             "yds_per_punt": row['yp'], "longest": row['lng']}
 
-    return first_name, last_name, scoring, punting
+    return first_name, last_name, kicks, punts
 
 
 def get_player_stats_returns(row):
@@ -271,56 +275,71 @@ def scrape_player_stats(parsed_html):
     return offense_df, defense_df, kicking_df, returns_df, positions_df
 
 
-def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, NFLGame):
-    parsed_player_stats = {}
+def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
     for index, row in offense_df.iterrows():
         first_name, last_name, passing, rushing, receiving = get_player_stats_offense(
             row)
-        player_offense = PlayerStats(first_name, last_name, row['id'], NFLGame)
-        player_offense.add_offense(passing, rushing, receiving)
-        # assign offensive stats to player name+id in dict
-        parsed_player_stats[first_name+last_name +
-                            str(row['id'])] = player_offense
+        player = Player(first_name, last_name, str(row['id']))
+
+        q = session.query(player.identifier)
+        if not session.query(q.exists()).scalar():
+            session.add(player)
+
+        player_rushing = Rushing(rushing, player=player, game=game)
+        player_passing = Passing(passing, player=player, game=game)
+        player_receiving = Receiving(receiving, player=player, game=game)
+
+        session.add(player_rushing)
+        session.add(player_passing)
+        session.add(player_receiving)
 
     for index, row in defense_df.iterrows():
         first_name, last_name, secondary, tackles, fumbles = get_player_stats_defense(
             row)
-        identifier = first_name+last_name+str(row['id'])
-        # check if player name+id is already in dict, if so add defensive stats
-        if identifier in parsed_player_stats:
-            parsed_player_stats[identifier].add_defense(
-                secondary, tackles, fumbles)
-        else:
-            player_defense = PlayerStats(
-                first_name, last_name, row['id'], NFLGame)
-            player_defense.add_defense(secondary, tackles, fumbles)
-            parsed_player_stats[identifier] = player_defense
+        player = Player(first_name, last_name, str(row['id']))
+
+        q = session.query(player.id)
+        if not session.query(q.exists()).scalar():
+            session.add(player)
+
+        player_secondary = Secondary(secondary, player=player, game=game)
+        player_tackles = Tackles(tackles, player=player, game=game)
+        player_fumbles = Fumbles(fumbles, player=player, game=game)
+
+        session.add(player_secondary)
+        session.add(player_tackles)
+        session.add(player_fumbles)
 
     for index, row in kicking_df.iterrows():
-        first_name, last_name, scoring, punting = get_player_stats_kicking(row)
-        identifier = first_name+last_name+str(row['id'])
-        if identifier in parsed_player_stats:
-            parsed_player_stats[identifier].add_kicking(scoring, punting)
-        else:
-            player_kicking = PlayerStats(
-                first_name, last_name, row['id'], NFLGame)
-            player_kicking.add_kicking(scoring, punting)
-            parsed_player_stats[identifier] = player_kicking
+        first_name, last_name, kicks, punts = get_player_stats_kicking(row)
+        player = Player(first_name, last_name, str(row['id']))
+
+        q = session.query(player.id)
+        if not session.query(q.exists()).scalar():
+            session.add(player)
+
+        player_kicks = Kicks(kicks, player=player, game=game)
+        player_punts = Punts(punts, player=player, game=game)
+
+        session.add(player_kicks)
+        session.add(player_punts)
 
     for index, row in returns_df.iterrows():
         first_name, last_name, kick_returns, punt_returns = get_player_stats_returns(
             row)
-        identifier = first_name+last_name+str(row['id'])
-        if identifier in parsed_player_stats:
-            parsed_player_stats[identifier].add_returns(
-                kick_returns, punt_returns)
-        else:
-            player_returns = PlayerStats(
-                first_name, last_name, row['id'], NFLGame)
-            player_returns.add_returns(kick_returns, punt_returns)
-            parsed_player_stats[identifier] = player_returns
+        player = Player(first_name, last_name, str(row['id']))
 
-    return parsed_player_stats
+        q = session.query(player.id)
+        if not session.query(q.exists()).scalar():
+            session.add(player)
+
+        player_kick_returns = Kicks(kick_returns, player=player, game=game)
+        player_punt_returns = Punts(punt_returns, player=player, game=game)
+
+        session.add(player_kick_returns)
+        session.add(player_punt_returns)
+
+    session.commit()
 
 
 def scrape_team_stats(parsed_html):
@@ -330,7 +349,7 @@ def scrape_team_stats(parsed_html):
     return df
 
 
-def get_team_stats(team_df, home_team, away_team, game):
+def parse_team_stats(team_df, home_team, away_team, game):
     for team in ['home', 'away']:
         first_downs = get_row_value_where(team_df, team, 'stat', "First Downs")
         rushes, rush_yds, rush_tds = tuple(get_row_value_where(
@@ -360,45 +379,35 @@ def get_team_stats(team_df, home_team, away_team, game):
 
         fumbles = {"fumbles": fumbles, "lost": fumbles_lost}
 
-        penalties = {"penalties": penalties, "yards":penalty_yds}
+        penalties = {"penalties": penalties, "yards": penalty_yds}
 
         downs = {"first_downs": first_downs, "third_down_conversions": third_down_conv, "third_down_attempts": third_down_attempts, "fourth_down_conversions": fourth_down_conv, "fourth_down_attempts": fourth_down_attempts,
                  "time_of_posession": possession}
+
+        
         if team == 'home':
-            home_team_stats = TeamStats(home_team, game)
-            home_team_stats.add_offense(passing, rushing, fumbles, downs)
+            team = Team(home_team)
+
         if team == 'away':
-            away_team_stats = TeamStats(away_team, game)
-            away_team_stats.add_offense(passing, rushing, fumbles, downs)
-            away_team_stats.add_defense(home_team_stats.offense)
-            home_team_stats.add_defense(away_team_stats.offense)
+            team = Team(away_team)
 
-    return home_team_stats, away_team_stats
+        if  Team.query.filter_by(nickname = team.nickname) == None:
+            session.add(team)
 
+        team_passing = TeamPassing(passing, team=team, game=game)
+        team_rushing = TeamRushing(rushing, team=team, game=game)
+        team_fumbles = TeamFumbles(fumbles, team=team, game=game)
 
-def get_player_objects(player_stats_dict, positions_df, game):
-    for player in player_stats_dict:
-        stats = player_stats_dict[player]
-        if player not in PLAYERS:
-            player_object = Player(
-                stats.first_name, stats.last_name, stats.id)
-            player_object.add_stats_from_game(game, stats)
-            player_object.add_position(positions_df)
-            PLAYERS[player] = player_object
-        else:
-            PLAYERS[player].add_stats_from_game(game, stats)
+        penalties = Penalties(penalties, team=team, game=game)
+        downs = Downs(downs, team=team, game=game)
 
+        session.add(team_passing)
+        session.add(team_rushing)
+        session.add(team_fumbles)
+        session.add(penalties)
+        session.add(downs)
 
-def get_team_objects(team_stats_list):
-    for team_stats in team_stats_list:
-        city, nickname = team_stats.team.split(
-            ' ')[0], team_stats.team.split(' ')[1]
-        if team_stats.team not in TEAMS:
-            team_object = Team(nickname, city)
-            team_object.add_stats_from_game(team_stats)
-            TEAMS[team_stats.team] = team_object
-        else:
-            TEAMS[team_stats.team].add_stats_from_game(team_stats)
+    session.commit()
 
 
 def process_page(url):
@@ -408,13 +417,10 @@ def process_page(url):
     offense_df, defense_df, kicking_df, returns_df, positions_df = scrape_player_stats(
         parsed_html)
     team_df = scrape_team_stats(parsed_html)
-    home_team_stats, away_team_stats = get_team_stats(
+    parse_team_stats(
         team_df, game.home_team, game.away_team, game)
-    team_stats_list = [home_team_stats, away_team_stats]
-    get_team_objects(team_stats_list)
-    player_stats_dict = parse_player_stats(
+    parse_player_stats(
         offense_df, defense_df, kicking_df, returns_df, game)
-    get_player_objects(player_stats_dict, positions_df, game)
 
 
 if __name__ == '__main__':
