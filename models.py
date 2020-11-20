@@ -12,11 +12,13 @@ class Game(Base):
     # main columns
     id = Column('id', Integer, primary_key=True)
     game = Column('game', String, unique=True)
-    home_team = Column('home_team', String, unique=True)
-    away_team = Column('away_team', String, unique=True)
     date = Column('date', Date)
+    home_id = Column(ForeignKey('team.id'))
+    away_id = Column(ForeignKey('team.id'))
 
     # relationships
+    home_team = relationship("Team", foreign_keys=home_id)
+    away_team = relationship("Team", foreign_keys=away_id)
     passing = relationship('Passing', backref='game_player_passing')
     rushing = relationship('Rushing', backref='game_player_rushing')
     receiving = relationship('Receiving', backref='game_player_receiving')
@@ -32,6 +34,7 @@ class Game(Base):
     team_fumbles = relationship('TeamFumbles', backref='game_team_fumbles')
     penalties = relationship('Penalties', backref='game_team_penalties')
     downs = relationship('Downs', backref='game_team_downs')
+
 
     # scoring
     home_final = Column('home_final', Integer)
@@ -55,8 +58,8 @@ class Game(Base):
     roof = Column('roof', String)
     surface = Column('surface', String)
     duration = Column('duration', Interval)
-    #weather = Column('weather', String)
-    temp = Column('temp', Integer)
+    weather = Column('weather', String)
+    degrees = Column('temp', Integer)
     humidity = Column('humidity', Integer)
     wind = Column('wind', Integer)
     wind_chill = Column('wind_chill', Integer)
@@ -65,44 +68,7 @@ class Game(Base):
     over_under = Column('over_under', String)
     over_under_num = Column('over_under_num', Float)
     week = Column('week', Integer)
-
-    def __init__(self, home_team, away_team, date, scores, game_info):
-        self.home_team = home_team
-        self.away_team = away_team
-        self.date = date
-
-        self.home_final = scores['home_scoring']['final']
-        self.home_first = scores['home_scoring']['1']
-        self.home_second = scores['home_scoring']['2']
-        self.home_third = scores['home_scoring']['3']
-        self.home_fourth = scores['home_scoring']['4']
-        if game_info['ot']:
-            self.home_ot = scores['home_scoring']['ot']
-        if game_info['ot2']:
-            self.home_ot2 = scores['home_scoring']['ot2']
-
-        self.away_final = scores['away_scoring']['final']
-        self.away_first = scores['away_scoring']['1']
-        self.away_second = scores['away_scoring']['2']
-        self.away_third = scores['away_scoring']['3']
-        self.away_fourth = scores['away_scoring']['4']
-        if game_info['ot']:
-            self.away_ot = scores['away_scoring']['ot']
-        if game_info['ot2']:
-            self.away_ot = scores['away_scoring']['ot2']
-
-        self.won_toss = game_info['won_toss']
-        self.roof = game_info['roof']
-        self.surface = game_info['surface']
-        self.duration = game_info['duration']
-        self.vegas_line = game_info['vegas_line']
-        self.vegas_line_num = game_info['vegas_line_num']
-        self.over_under = game_info['over_under']
-        self.over_under_num = game_info['over_under_num']
-        self.week = game_info['week']
-        self.game = home_team+"_vs_"+away_team+"_week_" + \
-            str(game_info['week'])+"_"+date.strftime("%m%d%Y")
-
+    
     def to_string(self):
         return self.home_team+"_vs_"+self.away_team+"_week_"+str(self.game_info['week'])+"_"+self.date.strftime("%m%d%Y")
 
@@ -282,15 +248,6 @@ class Team(Base):
     team_fumbles = relationship('TeamFumbles', backref='team_fumbles')
     penalties = relationship('Penalties', backref='team_penalties')
     downs = relationship('Downs', backref='team_downs')
-
-    def __init__(self, team):
-
-        nickname = team.split(' ')[-1]
-        city = ' '.join(team.split(' ')[:-1])
-
-        self.nickname = nickname.lower()
-        self.city = city.lower()
-
 
 class TeamPassing(Base):
     __tablename__ = "team_passing"

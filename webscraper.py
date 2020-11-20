@@ -3,6 +3,7 @@ import re
 import sys
 import requests
 import pandas as pd
+from get_or_create import get_or_create
 from models import *
 from bs4 import BeautifulSoup, Comment
 from time import sleep
@@ -27,6 +28,7 @@ def get_all_game_urls(year_range, week_range):
             soup = BeautifulSoup(res.text, "html.parser")
             for a in soup.find_all('a', text="Final"):
                 links.append((url_base+a['href'], j))
+                print("got url: "+url_base+a['href'])
     return links
 
 
@@ -67,9 +69,15 @@ def parse_game_info(title, game_info_df, box_score_df, date, week):
     #teams and date
     date = datetime.strptime(date, "%A %b %d, %Y %I:%M%p")
     teams = title.split('-')[0]
-    home_team, away_team = teams.split(
+    home_team_fullname, away_team_fullname = teams.split(
         ' at ')[0], teams.split(' at ')[1].strip()
+    home_nickname = home_team_fullname.split(' ')[-1].lower()
+    home_city = ' '.join(home_team_fullname.split(' ')[:-1]).lower()
+    home_team = get_or_create(session, Team, nickname=home_nickname, city=home_city)
 
+    away_nickname = away_team_fullname.split(' ')[-1].lower()
+    away_city = ' '.join(away_team_fullname.split(' ')[:-1]).lower()
+    away_team = get_or_create(session, Team, nickname=away_nickname, city=away_city)
     # game info
     won_toss = get_row_value_where(
         game_info_df, 'Game Info.1', 'Game Info', 'Won Toss')
@@ -80,88 +88,81 @@ def parse_game_info(title, game_info_df, box_score_df, date, week):
     t = datetime.strptime(get_row_value_where(
         game_info_df, 'Game Info.1', 'Game Info', 'Duration'), "%H:%M")
     duration = timedelta(hours=t.hour, minutes=t.minute, seconds=t.second)
-    try:
-        weather = get_row_value_where(
-            game_info_df, 'Game Info.1', 'Game Info', 'Weather').split(',')
-        weather_dict = {}
-        for item in weather:
-            key = re.sub('\d+', '', item).strip()
-            value = re.sub('\D+', '', item).strip()
-            weather_dict[key] = value
 
-    except:
-        weather = None
-        weather_dict = None
     attendance = get_row_value_where(
         game_info_df, 'Game Info.1', 'Game Info', 'Attendance')
     vegas_line = get_row_value_where(
         game_info_df, 'Game Info.1', 'Game Info', 'Vegas Line')
-    vegas_line_num = re.sub('[^\d\+-]', '', vegas_line)
+    vegas_line_num = re.sub('[^\d\+-]|49ers', '', vegas_line)
     vegas_line = re.sub('[^\w\s]+', '', vegas_line).strip()
     over_under = get_row_value_where(
         game_info_df, 'Game Info.1', 'Game Info', 'Over/Under')
     over_under_num = float(over_under.split()[0])
     over_under = re.sub('/W+', '', over_under)
     game_info = {"won_toss": won_toss, "roof": roof, "surface": surface, "duration": duration,
-                 "weather": weather, "vegas_line": vegas_line, "vegas_line_num": vegas_line_num, "over_under": over_under, "over_under_num": over_under_num, "week": week}
+                 "vegas_line": vegas_line, "vegas_line_num": vegas_line_num, "over_under": over_under, "over_under_num": over_under_num, "week": week}
+    try:
+        weather = get_row_value_where(
+            game_info_df, 'Game Info.1', 'Game Info', 'Weather').split(',')
+        for item in weather:
+            key = re.sub('\d+', '', item).strip().split(' ')[0]
+            value = re.sub('\D+', '', item).strip()
+            game_info[key] = value
 
+    except:
+        pass
     # scoring
     home_first = int(get_row_value_where(
-        box_score_df, '1', 'Unnamed: 1',  home_team))
+        box_score_df, '1', 'Unnamed: 1',  home_team_fullname))
     away_first = int(get_row_value_where(
-        box_score_df, '1', 'Unnamed: 1',  away_team))
+        box_score_df, '1', 'Unnamed: 1',  away_team_fullname))
 
     home_second = int(get_row_value_where(
-        box_score_df, '2', 'Unnamed: 1',  home_team))
+        box_score_df, '2', 'Unnamed: 1',  home_team_fullname))
     away_second = int(get_row_value_where(
-        box_score_df, '2', 'Unnamed: 1',  away_team))
+        box_score_df, '2', 'Unnamed: 1',  away_team_fullname))
 
     home_third = int(get_row_value_where(
-        box_score_df, '3', 'Unnamed: 1',  home_team))
+        box_score_df, '3', 'Unnamed: 1',  home_team_fullname))
     away_third = int(get_row_value_where(
-        box_score_df, '3', 'Unnamed: 1',  away_team))
+        box_score_df, '3', 'Unnamed: 1',  away_team_fullname))
 
     home_fourth = int(get_row_value_where(
-        box_score_df, '4', 'Unnamed: 1',  home_team))
+        box_score_df, '4', 'Unnamed: 1',  home_team_fullname))
     away_fourth = int(get_row_value_where(
-        box_score_df, '4', 'Unnamed: 1',  away_team))
+        box_score_df, '4', 'Unnamed: 1',  away_team_fullname))
 
     home_final = int(get_row_value_where(
-        box_score_df, 'Final', 'Unnamed: 1',  home_team))
+        box_score_df, 'Final', 'Unnamed: 1',  away_team_fullname))
     away_final = int(get_row_value_where(
-        box_score_df, 'Final', 'Unnamed: 1',  away_team))
+        box_score_df, 'Final', 'Unnamed: 1',  away_team_fullname))
+
+    home_score = {'home_first': home_first, 'home_second': home_second,
+                  'home_third': home_third, 'home_fourth': home_fourth, 'home_final': home_final}
+    away_score = {'away_first': away_first, 'away_second': away_second,
+                  'away_third': away_third, 'away_fourth': away_fourth, 'away_final': away_final}
 
     if ('OT' in box_score_df.columns):
-        OT = True
         home_OT = int(get_row_value_where(
-            box_score_df, 'OT', 'Unnamed: 1',  home_team))
+            box_score_df, 'OT', 'Unnamed: 1',  home_team_fullname))
         away_OT = int(get_row_value_where(
-            box_score_df, 'OT', 'Unnamed: 1',  away_team))
-        home_score = {'1': home_first, '2': home_second, '3': home_third,
-                      '4': home_fourth, 'ot': home_OT, 'final': home_final}
-        away_score = {'1': away_first, '2': away_second, '3': away_third,
-                      '4': away_fourth, 'ot': away_OT, 'final': away_final}
-        if ('OT2' in box_score_df.columns):
-            OT2 = True
-            home_OT2 = int(get_row_value_where(
-                box_score_df, 'OT2', 'Unnamed: 1',  home_team))
-            away_OT2 = int(get_row_value_where(
-                box_score_df, 'OT2', 'Unnamed: 1',  away_team))
-            home_score['ot2'] = home_OT2
-            away_score['ot2'] = away_OT2
-    else:
-        OT = False
-        OT2 = False
-        home_score = {'1': home_first, '2': home_second,
-                      '3': home_third, '4': home_fourth, 'final': home_final}
-        away_score = {'1': away_first, '2': away_second,
-                      '3': away_third, '4': away_fourth, 'final': away_final}
+            box_score_df, 'OT', 'Unnamed: 1',  away_team_fullname))
 
-    scores = {"home_scoring": home_score, "away_scoring": away_score}
-    game_info['ot'] = OT
-    game_info['ot2'] = OT2
+        home_score['home_ot'] = home_OT
+        away_score['away_ot'] = away_OT
+    if ('OT2' in box_score_df.columns):
+        home_OT2 = int(get_row_value_where(
+            box_score_df, 'OT2', 'Unnamed: 1',  home_team_fullname))
+        away_OT2 = int(get_row_value_where(
+            box_score_df, 'OT2', 'Unnamed: 1',  away_team_fullname))
+        home_score['home_ot2'] = home_OT2
+        away_score['away_ot2'] = away_OT2
 
-    game = Game(home_team, away_team, date, scores, game_info)
+    game_string = home_team_fullname+"_vs_"+away_team_fullname+"_week_" + \
+        str(game_info['week'])+"_"+date.strftime("%m%d%Y")
+
+    game = Game(home_team=home_team, away_team=away_team, date=date,
+                game=game_string, **home_score, **away_score, **game_info)
     session.add(game)
     session.commit()
 
@@ -179,8 +180,8 @@ def split_name(fullname):
         first_name = fullname[0]
         last_name = fullname[1]
     else:
-        last_name = fullname[-1]
-        first_name = ' '.join(fullname[0:len(fullname-1)])
+        first_name = fullname[-1]
+        last_name = ' '.join(fullname[1:len(fullname)-1])
     return first_name, last_name
 
 
@@ -254,7 +255,10 @@ def read_table(parsed_html, div_id, extra_headers=False, table_in_comment=False,
     else:
         table = parsed_html.find(id=div_id)
     if extra_headers:
-        remove_extra_table_headers(table)
+        try:
+            remove_extra_table_headers(table)
+        except:
+            pass
     df = pd.read_html(table.prettify(), header=0, flavor='bs4')[0]
     df.columns = df.columns.str.replace(
         re.compile(r'\W'), '').str.lower()
@@ -285,30 +289,33 @@ def scrape_player_stats(parsed_html):
     return offense_df, defense_df, kicking_df, returns_df, positions_df
 
 
-def get_or_create_player(first_name, last_name, id_num):
-    identifier = first_name+last_name+id_num
-    q = session.query(Player).filter_by(identifier=identifier).first()
-    print(identifier)
-    print(q)
-    if not q:
-        player = Player(first_name=first_name, last_name=last_name, identifier=identifier)
-        session.add(player)
-        session.commit()
-        return player
-    else:
-        return q
+# def get_or_create_player(first_name, last_name, id_num):
+#     identifier = first_name+last_name+id_num
+#     q = session.query(Player).filter_by(identifier=identifier).first()
+#     if not q:
+#         player = Player(first_name=first_name,
+#                         last_name=last_name, identifier=identifier)
+#         session.add(player)
+#         session.commit()
+#         return player
+#     else:
+#         return q
 
 
 def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
     for index, row in offense_df.iterrows():
         first_name, last_name, passing, rushing, receiving, id_num = get_player_stats_offense(
             row)
+        identifier = first_name+last_name+id_num
+        player = get_or_create(
+            session, Player, first_name=first_name, last_name=last_name, identifier=identifier)
 
-        player = get_or_create_player(first_name, last_name, id_num)
-
-        player_rushing = Rushing(**rushing, player_rushing=player, game_player_rushing=game)
-        player_passing = Passing(**passing, player_passing=player, game_player_passing=game)
-        player_receiving = Receiving(**receiving, player_receiving=player, game_player_receiving=game)
+        player_rushing = Rushing(
+            **rushing, player_rushing=player, game_player_rushing=game)
+        player_passing = Passing(
+            **passing, player_passing=player, game_player_passing=game)
+        player_receiving = Receiving(
+            **receiving, player_receiving=player, game_player_receiving=game)
 
         session.add(player_rushing)
         session.add(player_passing)
@@ -318,12 +325,16 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
     for index, row in defense_df.iterrows():
         first_name, last_name, secondary, tackles, fumbles, id_num = get_player_stats_defense(
             row)
+        identifier = first_name+last_name+id_num
+        player = get_or_create(
+            session, Player, first_name=first_name, last_name=last_name, identifier=identifier)
 
-        player = get_or_create_player(first_name, last_name, id_num)
-
-        player_secondary = Secondary(**secondary, player_secondary=player, game_player_secondary=game)
-        player_tackles = Tackles(**tackles, player_tackles=player, game_player_tackles=game)
-        player_fumbles = Fumbles(**fumbles, player_fumbles=player, game_player_fumbles=game)
+        player_secondary = Secondary(
+            **secondary, player_secondary=player, game_player_secondary=game)
+        player_tackles = Tackles(
+            **tackles, player_tackles=player, game_player_tackles=game)
+        player_fumbles = Fumbles(
+            **fumbles, player_fumbles=player, game_player_fumbles=game)
 
         session.add(player_secondary)
         session.add(player_tackles)
@@ -333,11 +344,14 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
     for index, row in kicking_df.iterrows():
         first_name, last_name, kicks, punts, id_num = get_player_stats_kicking(
             row)
+        identifier = first_name+last_name+id_num
+        player = get_or_create(
+            session, Player, first_name=first_name, last_name=last_name, identifier=identifier)
 
-        player = get_or_create_player(first_name, last_name, id_num)
-
-        player_kicks = Kicks(**kicks, player_kicks=player, game_player_kicks=game)
-        player_punts = Punts(**punts, player_punts=player, game_player_punts=game)
+        player_kicks = Kicks(**kicks, player_kicks=player,
+                             game_player_kicks=game)
+        player_punts = Punts(**punts, player_punts=player,
+                             game_player_punts=game)
 
         session.add(player_kicks)
         session.add(player_punts)
@@ -347,7 +361,9 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
         first_name, last_name, kick_returns, punt_returns, id_num = get_player_stats_returns(
             row)
 
-        player = get_or_create_player(first_name, last_name, id_num)
+        identifier = first_name+last_name+id_num
+        player = get_or_create(
+            session, Player, first_name=first_name, last_name=last_name, identifier=identifier)
 
         player_kick_returns = KickReturns(
             **kick_returns, player_kick_returns=player, game_player_kick_returns=game)
@@ -402,19 +418,21 @@ def parse_team_stats(team_df, home_team, away_team, game):
                  "time_of_posession": possession}
 
         if team == 'home':
-            team = Team(home_team)
+            team=home_team
+        else:
+            team=away_team
+        # if session.query(Team).filter_by(nickname=team.nickname).first() == None:
+        #     session.add(team)
 
-        if team == 'away':
-            team = Team(away_team)
+        team_passing = TeamPassing(
+            **passing, team_passing=team, game_team_passing=game)
+        team_rushing = TeamRushing(
+            **rushing, team_rushing=team, game_team_rushing=game)
+        team_fumbles = TeamFumbles(
+            **fumbles, team_fumbles=team, game_team_fumbles=game)
 
-        if session.query(Team).filter_by(nickname=team.nickname).first() == None:
-            session.add(team)
-
-        team_passing = TeamPassing(**passing, team_passing=team, game_team_passing=game)
-        team_rushing = TeamRushing(**rushing, team_rushing=team, game_team_rushing=game)
-        team_fumbles = TeamFumbles(**fumbles, team_fumbles=team, game_team_fumbles=game)
-
-        penalties = Penalties(**penalties, team_penalties=team, game_team_penalties=game)
+        penalties = Penalties(
+            **penalties, team_penalties=team, game_team_penalties=game)
         downs = Downs(**downs, team_downs=team, game_team_downs=game)
 
         session.add(team_passing)
@@ -442,11 +460,11 @@ def process_page(url):
 if __name__ == '__main__':
     PLAYERS = {}
     TEAMS = {}
-    year_range = range(2000, 2001)
-    week_range = range(1, 2)
+    year_range = range(2018, 2019)
+    week_range = range(1, 3)
     urls = get_all_game_urls(year_range, week_range)
 
-    for url, week in urls[1:2]:
+    for url, week in urls:
         sleep(3)
         print(url)
         process_page(url)
