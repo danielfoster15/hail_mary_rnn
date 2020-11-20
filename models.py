@@ -8,7 +8,7 @@ from datetime import datetime
 
 class NFLGame(Base):
     __tablename__ = "game"
-
+    print('created game table')
     # main columns
     id = Column('id', Integer, primary_key=True)
     game = Column('game', String, unique=True)
@@ -27,6 +27,11 @@ class NFLGame(Base):
     kick_returns = relationship('KickReturns', backref='game')
     punts = relationship('Punts', backref='game')
     kicks = relationship('Kicks', backref='game')
+    team_passing = relationship('TeamPassing', backref='game')
+    team_rushing = relationship('TeamRushing', backref='game')
+    team_fumbles = relationship('TeamFumbles', backref='game')
+    penalties = relationship('Penalties', backref='game')
+    downs = relationship('Downs', backref='game')
 
     # scoring
     home_final = Column('home_final', Integer)
@@ -101,6 +106,7 @@ class NFLGame(Base):
     def to_string(self):
         return self.home_team+"_vs_"+self.away_team+"_week_"+str(self.game_info['week'])+"_"+self.date.strftime("%m%d%Y")
 
+#Player based objects 
 
 class Player(Base):
 
@@ -123,10 +129,10 @@ class Player(Base):
     punts = relationship('Punts', backref='player')
     kicks = relationship('Kicks', backref='player')
 
-    def __init__(self, first_name, last_name, id):
+    def __init__(self, first_name, last_name, id_num):
         self.first_name = first_name
         self.last_name = last_name
-        self.id = first_name+last_name+id
+        self.identifier = first_name+last_name+id_num
         self.position = []
 
 
@@ -146,7 +152,7 @@ class Passing(Base):
     longest = Column('longest', Integer)
     qb_rating = Column('qb_rating', Float)
 
-    def __init__(self, passing):
+    def __init__(self, passing, player, game):
 
         self.completions = passing['completions']
         self.attempts = passing['attempts']
@@ -170,7 +176,8 @@ class Rushing(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
-    def __init__(self, rushing):
+    def __init__(self, rushing, player, game):
+        print(rushing)
         self.attempts = rushing['attempts']
         self.yards = rushing['yards']
         self.touchdowns = rushing['touchdowns']
@@ -190,7 +197,7 @@ class Receiving(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
-    def __init__(self, receiving):
+    def __init__(self, receiving, player, game):
         self.receptions = receiving['receptions']
         self.targeted = ['targeted']
         self.yards = ['yards']
@@ -211,7 +218,7 @@ class Secondary(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
-    def __init__(self, secondary):
+    def __init__(self, secondary, player, game):
         self.interceptions = secondary['interceptions']
         self.passes_defended = secondary['passes_defended']
         self.yards = secondary['yards']
@@ -233,7 +240,7 @@ class Tackles(Base):
     tackles_for_loss = Column('tackles_for_loss', Integer)
     qb_hits = Column('qb_hits', Integer)
 
-    def __init__(self, tackles):
+    def __init__(self, tackles, player, game):
         self.sacks = tackles['sacks']
         self.combined = tackles['combined']
         self.solo = tackles['solo']
@@ -254,7 +261,7 @@ class Fumbles(Base):
     yards = Column('yards', Integer)
     touchdowns = Column('touchdowns', Integer)
 
-    def __init__(self, fumbles):
+    def __init__(self, fumbles, player, game):
         self.forced = fumbles['forced']
         self.recovered = fumbles['recovered']
         self.yards = fumbles['yards']
@@ -273,7 +280,7 @@ class PuntReturns(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
-    def __init__(self, punt_returns):
+    def __init__(self, punt_returns, player, game):
         self.returns = punt_returns['returns']
         self.yards = punt_returns['yards']
         self.touchdowns = punt_returns['touchdowns']
@@ -292,7 +299,7 @@ class KickReturns(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
-    def __init__(self, kick_returns):
+    def __init__(self, kick_returns, player, game):
         self.returns = kick_returns['returns']
         self.yards = kick_returns['yards']
         self.touchdowns = kick_returns['touchdowns']
@@ -306,16 +313,16 @@ class Kicks(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
-    extra_point_attempt = Column('extra_point_attempt', Integer)
-    extra_point_made = Column('extra_point_made', Integer)
-    field_goal_attempt = Column('field_goal_attempt', Integer)
-    field_goal_made = Column('field_goal_made', Integer)
+    extra_point_attempt = Column('extra_point_attempts', Integer)
+    extra_point_made = Column('extra_points_made', Integer)
+    field_goal_attempt = Column('fg_attempts', Integer)
+    field_goal_made = Column('fg_made', Integer)
 
-    def __init__(self, punt_returns):
-        self.extra_point_attempt = punt_returns['extra_point_attempt']
-        self.extra_point_made = punt_returns['extra_point_made']
-        self.field_goal_attempt = punt_returns['field_goal_attempt']
-        self.field_goal_made = punt_returns['field_goal_made']
+    def __init__(self, kicks, player, game):
+        self.extra_point_attempt = kicks['extra_point_attempts']
+        self.extra_point_made = kicks['extra_points_made']
+        self.field_goal_attempt = kicks['fg_attempts']
+        self.field_goal_made = kicks['fg_made']
 
 
 class Punts(Base):
@@ -329,17 +336,27 @@ class Punts(Base):
     yards = Column('yards', Integer)
     longest = Column('longest', Integer)
 
-    def __init__(self, punts):
+    def __init__(self, punts, player, game):
         self.punts = punts['punts']
         self.yards = punts['yards']
         self.longest = punts['longest']
 
+#Team based objects
 
 class Team(Base):
     __tablename__ = "team"
+
+    #main columns
     id = Column('id', Integer, primary_key=True)
     nickname = Column('nickname', String, unique=True)
     city = Column('city', String)
+
+    #relationships
+    team_passing = relationship('TeamPassing', backref='team')
+    team_rushing = relationship('TeamRushing', backref='team')
+    team_fumbles = relationship('TeamFumbles', backref='team')
+    penalties = relationship('Penalties', backref='team')
+    downs = relationship('Downs', backref='team')
 
     def __init__(self, team):
 
@@ -352,9 +369,9 @@ class Team(Base):
 
 class TeamPassing(Base):
     __tablename__ = "team_passing"
-
+    #main columns
     id = Column('id', Integer, primary_key=True)
-    player_id = Column(Integer, ForeignKey('player.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
     completions = Column('completions', Integer)
     attempts = Column('attempts', Integer)
@@ -363,8 +380,9 @@ class TeamPassing(Base):
     interceptions = Column('interceptions', Integer)
     sacked = Column('sacked', Integer)
     sack_yards = Column('sack_yards', Integer)
+    
 
-    def __init__(self, passing):
+    def __init__(self, passing, team, game):
         self.completions = passing['completions']
         self.attempts = passing['attempts']
         self.yards = passing['yards']
@@ -384,7 +402,7 @@ class TeamRushing(Base):
     yards = Column('yards', Integer)
     touchdowns = Column('touchdowns', Integer)
 
-    def __init__(self, rushing):
+    def __init__(self, rushing, team, game):
         self.attempts = rushing['attempts']
         self.yards = rushing['yards']
         self.touchdowns = rushing['touchdowns']
@@ -400,7 +418,7 @@ class TeamFumbles(Base):
     fumbles = Column('fumbles', Integer)
     lost = Column('lost', Integer)
 
-    def __init__(self, fumbles):
+    def __init__(self, fumbles, team, game):
         self.fumbles = fumbles['fumbles']
         self.lost = fumbles['lost']
 
@@ -415,7 +433,7 @@ class Penalties(Base):
     penalties = Column('penalties', Integer)
     yards = Column('yards', Integer)
 
-    def __init__(self, penalties):
+    def __init__(self, penalties, team, game):
         self.penalties = penalties['penalties']
         self.yards = penalties['yards']
 
@@ -434,7 +452,7 @@ class Downs(Base):
     fourth_down_attempts = Column('fourth_down_attempts', Integer)
     time_of_posession = Column('time_of_posession', Interval)
 
-    def __init__(self, downs):
+    def __init__(self, downs, team, game):
         self.first_downs = downs['first_downs']
         self.third_down_conversions = downs['third_down_conversions']
         self.third_down_attempts = downs['third_down_attempts']

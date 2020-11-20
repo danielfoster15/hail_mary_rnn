@@ -7,7 +7,10 @@ from models import *
 from bs4 import BeautifulSoup, Comment
 from time import sleep
 from datetime import datetime, timedelta
-from database import session
+from database import session, Base, engine
+
+Base.metadata.drop_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 HEADERS = {
     'user-agent': 'Daniel Foster/daniel.a.foster@gmail.com/Doing a home project'}
@@ -69,16 +72,16 @@ def parse_game_info(title, game_info_df, box_score_df, date, week):
 
     # game info
     won_toss = get_row_value_where(
-        game_info_df, 'Unnamed: 1', 'Game Info', 'Won Toss')
-    roof = get_row_value_where(game_info_df, 'Unnamed: 1', 'Game Info', 'Roof')
+        game_info_df, 'Game Info.1', 'Game Info', 'Won Toss')
+    roof = get_row_value_where(game_info_df, 'Game Info.1', 'Game Info', 'Roof')
     surface = get_row_value_where(
-        game_info_df, 'Unnamed: 1', 'Game Info', 'Surface')
+        game_info_df, 'Game Info.1', 'Game Info', 'Surface')
     t = datetime.strptime(get_row_value_where(
-        game_info_df, 'Unnamed: 1', 'Game Info', 'Duration'), "%H:%M")
+        game_info_df, 'Game Info.1', 'Game Info', 'Duration'), "%H:%M")
     duration = timedelta(hours=t.hour, minutes=t.minute, seconds=t.second)
     try:
         weather = get_row_value_where(
-            game_info_df, 'Unnamed: 1', 'Game Info', 'Weather').split(',')
+            game_info_df, 'Game Info.1', 'Game Info', 'Weather').split(',')
         weather_dict = {}
         for item in weather:
             key = re.sub('\d+', '', item).strip()
@@ -89,13 +92,13 @@ def parse_game_info(title, game_info_df, box_score_df, date, week):
         weather = None
         weather_dict = None
     attendance = get_row_value_where(
-        game_info_df, 'Unnamed: 1', 'Game Info', 'Attendance')
+        game_info_df, 'Game Info.1', 'Game Info', 'Attendance')
     vegas_line = get_row_value_where(
-        game_info_df, 'Unnamed: 1', 'Game Info', 'Vegas Line')
+        game_info_df, 'Game Info.1', 'Game Info', 'Vegas Line')
     vegas_line_num = re.sub('[^\d\+-]', '', vegas_line)
     vegas_line = re.sub('[^\w\s]+', '', vegas_line).strip()
     over_under = get_row_value_where(
-        game_info_df, 'Unnamed: 1', 'Game Info', 'Over/Under')
+        game_info_df, 'Game Info.1', 'Game Info', 'Over/Under')
     over_under_num = float(over_under.split()[0])
     over_under = re.sub('/W+', '', over_under)
     game_info = {"won_toss": won_toss, "roof": roof, "surface": surface, "duration": duration,
@@ -184,10 +187,10 @@ def get_player_stats_offense(row):
     first_name, last_name = split_name(fullname)
 
     passing = {"completions": row['cmp'], "attempts": row['att'], "yards": row['yds'],
-               "touchdowns": row['td'], "interceptions": row['int'], "sacked": row['sk'], "sacked_yds": row['yds1'], "longest": row['lng'], "rating": row['rate']}
+               "touchdowns": row['td'], "interceptions": row['int'], "sacked": row['sk'], "sack_yards": row['yds1'], "longest": row['lng'], "qb_rating": row['rate']}
 
     rushing = {"attempts": row['att1'], "yards": row['yds2'],
-               "touchdowns": row['td1'], "longest": row['lng1']},
+               "touchdowns": row['td1'], "longest": row['lng1']}
 
     receiving = {"targeted": row['tgt'], "receptions": row['rec'], "yards": row['yds3'],
                  "touchdowns": row['td2'], "longest": row['lng2']}
@@ -215,7 +218,7 @@ def get_player_stats_kicking(row):
     fullname = row['player'].split(' ')
     first_name, last_name = split_name(fullname)
 
-    kicks = {"extra_points_made": row['xpm'], "extra_points_attempts": row['xpa'],
+    kicks = {"extra_points_made": row['xpm'], "extra_point_attempts": row['xpa'],
              "fg_made": row['fgm'], "fg_attempts": row['fga']}
 
     punts = {"punts": row['pnt'], "yards": row['yds'],
@@ -227,10 +230,10 @@ def get_player_stats_kicking(row):
 def get_player_stats_returns(row):
     fullname = row['player'].split(' ')
     first_name, last_name = split_name(fullname)
-    kick_returns = {"returns": row['rt'], "yds": row['yds'],
+    kick_returns = {"returns": row['rt'], "yards": row['yds'],
                     "yds_per_return": row['yrt'], "longest": row['lng'], "touchdowns": row['td']}
 
-    punt_returns = {"returns": row['ret'], "yds": row['yds1'],
+    punt_returns = {"returns": row['ret'], "yards": row['yds1'],
                     "yds_per_return": row['yr'], "longest": row['lng1'], "touchdowns": row['td1']}
 
     return first_name, last_name, kick_returns, punt_returns
@@ -280,9 +283,8 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
         first_name, last_name, passing, rushing, receiving = get_player_stats_offense(
             row)
         player = Player(first_name, last_name, str(row['id']))
-
-        q = session.query(player.identifier)
-        if not session.query(q.exists()).scalar():
+        q = session.query(Player).filter_by(identifier = player.identifier).scalar()
+        if not q:
             session.add(player)
 
         player_rushing = Rushing(rushing, player=player, game=game)
@@ -298,8 +300,8 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
             row)
         player = Player(first_name, last_name, str(row['id']))
 
-        q = session.query(player.id)
-        if not session.query(q.exists()).scalar():
+        q = session.query(Player).filter_by(identifier = player.identifier).scalar()
+        if not q:
             session.add(player)
 
         player_secondary = Secondary(secondary, player=player, game=game)
@@ -314,8 +316,8 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
         first_name, last_name, kicks, punts = get_player_stats_kicking(row)
         player = Player(first_name, last_name, str(row['id']))
 
-        q = session.query(player.id)
-        if not session.query(q.exists()).scalar():
+        q = session.query(Player).filter_by(identifier = player.identifier).scalar()
+        if not q:
             session.add(player)
 
         player_kicks = Kicks(kicks, player=player, game=game)
@@ -329,12 +331,12 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
             row)
         player = Player(first_name, last_name, str(row['id']))
 
-        q = session.query(player.id)
-        if not session.query(q.exists()).scalar():
+        q = session.query(Player).filter_by(identifier = player.identifier).scalar()
+        if not q:
             session.add(player)
 
-        player_kick_returns = Kicks(kick_returns, player=player, game=game)
-        player_punt_returns = Punts(punt_returns, player=player, game=game)
+        player_kick_returns = KickReturns(kick_returns, player=player, game=game)
+        player_punt_returns = PuntReturns(punt_returns, player=player, game=game)
 
         session.add(player_kick_returns)
         session.add(player_punt_returns)
@@ -372,7 +374,7 @@ def parse_team_stats(team_df, home_team, away_team, game):
         possession = timedelta(minutes=t.minute, seconds=t.second)
 
         passing = {"completions": completions, "attempts": attempts, "yards": pass_yds,
-                   "touchdowns": pass_tds, "interceptions": interceptions, "sacked": sacks, "sacked_yds": sack_yds}
+                   "touchdowns": pass_tds, "interceptions": interceptions, "sacked": sacks, "sack_yards": sack_yds}
 
         rushing = {"attempts": rushes, "yards": rush_yds,
                    "touchdowns": rush_tds}
@@ -390,8 +392,8 @@ def parse_team_stats(team_df, home_team, away_team, game):
 
         if team == 'away':
             team = Team(away_team)
-
-        if  Team.query.filter_by(nickname = team.nickname) == None:
+            
+        if  session.query(Team).filter_by(nickname = team.nickname).first() == None:
             session.add(team)
 
         team_passing = TeamPassing(passing, team=team, game=game)
@@ -436,3 +438,4 @@ if __name__ == '__main__':
         process_page(url)
 # get positions for players other than starters
 # build database
+
