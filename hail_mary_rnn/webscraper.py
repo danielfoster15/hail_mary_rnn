@@ -218,8 +218,8 @@ def split_name(fullname):
         first_name = fullname[0]
         last_name = fullname[1]
     else:
-        first_name = fullname[-1]
-        last_name = ' '.join(fullname[1:len(fullname)-1])
+        first_name = fullname[0]
+        last_name = ' '.join(fullname[1:])
     return first_name, last_name
 
 
@@ -512,12 +512,12 @@ def process_page(url):
 
 
 if __name__ == '__main__':
-    # Base.metadata.drop_all(bind=engine)
-    # Base.metadata.create_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
 
     PLAYERS = {}
     TEAMS = {}
-    year_range = range(2013, 2017)
+    year_range = range(2000, 2020)
     week_range = range(1, 18)
     for year in year_range:
         for week in week_range:
