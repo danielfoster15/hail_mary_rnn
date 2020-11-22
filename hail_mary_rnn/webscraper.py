@@ -37,7 +37,7 @@ def get_game_page(url):
 
 
 def get_row_value_where(df, out_col, where_col, s):
-    return df[out_col].where(df[where_col] == s).dropna().tolist()[0]
+    return df[out_col].where(df[where_col] == s).fillna(0).tolist()[0]
 
 
 def scrape_game_info(parsed_html):
