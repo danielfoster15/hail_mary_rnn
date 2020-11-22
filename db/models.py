@@ -25,8 +25,10 @@ class Game(Base):
     secondary = relationship('Secondary', backref='game_player_secondary')
     tackles = relationship('Tackles', backref='game_player_tackles')
     fumbles = relationship('Fumbles', backref='game_player_fumbles')
-    punt_returns = relationship('PuntReturns', backref='game_player_punt_returns')
-    kick_returns = relationship('KickReturns', backref='game_player_kick_returns')
+    punt_returns = relationship(
+        'PuntReturns', backref='game_player_punt_returns')
+    kick_returns = relationship(
+        'KickReturns', backref='game_player_kick_returns')
     punts = relationship('Punts', backref='game_player_punts')
     kicks = relationship('Kicks', backref='game_player_kicks')
     team_passing = relationship('TeamPassing', backref='game_team_passing')
@@ -34,7 +36,6 @@ class Game(Base):
     team_fumbles = relationship('TeamFumbles', backref='game_team_fumbles')
     penalties = relationship('Penalties', backref='game_team_penalties')
     downs = relationship('Downs', backref='game_team_downs')
-
 
     # scoring
     home_final = Column('home_final', Integer)
@@ -68,8 +69,6 @@ class Game(Base):
     over_under_num = Column('over_under_num', Float)
     week = Column('week', Integer)
 
-    def to_string(self):
-        return self.home_team+"_vs_"+self.away_team+"_week_"+str(self.game_info['week'])+"_"+self.date.strftime("%m%d%Y")
 
 # Player based objects
 
@@ -124,6 +123,7 @@ class Rushing(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
+
 class Receiving(Base):
 
     __tablename__ = "receiving"
@@ -137,6 +137,7 @@ class Receiving(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
+
 class Secondary(Base):
 
     __tablename__ = "secondary"
@@ -149,6 +150,7 @@ class Secondary(Base):
     yards = Column('yards', Integer)
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
+
 
 class Tackles(Base):
 
@@ -248,6 +250,7 @@ class Team(Base):
     penalties = relationship('Penalties', backref='team_penalties')
     downs = relationship('Downs', backref='team_downs')
 
+
 class TeamPassing(Base):
     __tablename__ = "team_passing"
     # main columns
@@ -262,6 +265,7 @@ class TeamPassing(Base):
     sacked = Column('sacked', Integer)
     sack_yards = Column('sack_yards', Integer)
 
+
 class TeamRushing(Base):
     __tablename__ = "team_rushing"
 
@@ -272,6 +276,7 @@ class TeamRushing(Base):
     yards = Column('yards', Integer)
     touchdowns = Column('touchdowns', Integer)
 
+
 class TeamFumbles(Base):
 
     __tablename__ = "team_fumbles"
@@ -281,6 +286,7 @@ class TeamFumbles(Base):
     game_id = Column(Integer, ForeignKey('game.id'))
     fumbles = Column('fumbles', Integer)
     lost = Column('lost', Integer)
+
 
 class Penalties(Base):
 
