@@ -111,6 +111,10 @@ class Passing(Base):
     longest = Column('longest', Integer)
     qb_rating = Column('qb_rating', Float)
 
+    def get_stats(self):
+        return {"completions": self.completions, "attempts": self.attempts, "yards": self.yards, "touchdowns": self.touchdowns, "interceptions": self.interceptions,
+                "sacked": self.sacked, "sack_yards": self.sack_yards, "longest": self.longest, "qb_rating": self.qb_rating}
+
 
 class Rushing(Base):
     __tablename__ = "rushing"
@@ -178,6 +182,9 @@ class Fumbles(Base):
     recovered = Column('recovered', Integer)
     yards = Column('yards', Integer)
     touchdowns = Column('touchdowns', Integer)
+
+    def get_stats(self):
+        return {"forced": self.forced, "recovered": self.recovered, "yards": self.yards, "touchdowns": self.touchdowns}
 
 
 class PuntReturns(Base):

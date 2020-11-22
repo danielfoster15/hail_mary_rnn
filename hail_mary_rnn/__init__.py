@@ -1,0 +1,1 @@
+from hail_mary_rnn.db import database
