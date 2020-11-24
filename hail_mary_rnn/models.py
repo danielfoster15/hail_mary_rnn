@@ -112,7 +112,7 @@ class Passing(Base):
 
     def get_stats(self):
         return {"completions": self.completions, "attempts": self.attempts, "yards": self.yards, "touchdowns": self.touchdowns, "interceptions": self.interceptions,
-                "sacked": self.sacked, "sack_yards": self.sack_yards, "longest": self.longest, "qb_rating": self.qb_rating}
+                "sacked": self.sacked, "sack_yards": self.sack_yards, "qb_rating": self.qb_rating}
 
 
 class Rushing(Base):
@@ -126,6 +126,9 @@ class Rushing(Base):
     yards = Column('yards', Integer)
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
+
+    def get_stats(self):
+        return {"attempts": self.attempts, "yards": self.yards, "touchdowns": self.touchdowns}
 
 
 class Receiving(Base):
@@ -142,6 +145,9 @@ class Receiving(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
+    def get_stats(self):
+        return {"receptions": self.receptions, "targeted": self.targeted, "yards": self.yards, "touchdowns": self.touchdowns}
+
 
 class Secondary(Base):
 
@@ -156,6 +162,9 @@ class Secondary(Base):
     yards = Column('yards', Integer)
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
+
+    def get_stats(self):
+        return {"interceptions": self.interceptions, "passes_defended": self.passes_defended, "yards": self.yards, "touchdowns": self.touchdowns}
 
 
 class Tackles(Base):
@@ -172,6 +181,10 @@ class Tackles(Base):
     assists = Column('assists', Integer)
     tackles_for_loss = Column('tackles_for_loss', Integer)
     qb_hits = Column('qb_hits', Integer)
+
+    def get_stats(self):
+        return {"sacks": self.sacks, "combined": self.combined, "solo": self.solo, "assists": self.assists, "tackles_for_loss": self.tackles_for_loss,
+                "qb_hits": self.qb_hits}
 
 
 class Fumbles(Base):
@@ -205,6 +218,9 @@ class PuntReturns(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
+    def get_stats(self):
+        return {"returns": self.returns, "yards": self.yards, "touchdowns": self.touchdowns}
+
 
 class KickReturns(Base):
 
@@ -220,6 +236,9 @@ class KickReturns(Base):
     touchdowns = Column('touchdowns', Integer)
     longest = Column('longest', Integer)
 
+    def get_stats(self):
+        return {"returns": self.returns, "yards": self.yards, "touchdowns": self.touchdowns}
+
 
 class Kicks(Base):
 
@@ -234,6 +253,10 @@ class Kicks(Base):
     fg_attempts = Column('fg_attempts', Integer)
     fg_made = Column('fg_made', Integer)
 
+    def get_stats(self):
+        return {"extra_point_attempts": self.extra_point_attempts, "extra_points_made": self.extra_points_made, "fg_attempts": self.fg_attempts, "fg_made": self.fg_made
+        }
+
 
 class Punts(Base):
 
@@ -246,6 +269,10 @@ class Punts(Base):
     punts = Column('punts', Integer)
     yards = Column('yards', Integer)
     longest = Column('longest', Integer)
+
+    def get_stats(self):
+            return {"punts": self.punts, "yards": self.yards}
+
 
 # Team based objects
 
@@ -273,8 +300,10 @@ class Team(Base):
     secondary = relationship('Secondary', backref='team_player_secondary')
     tackles = relationship('Tackles', backref='team_player_tackles')
     fumbles = relationship('Fumbles', backref='team_player_fumbles')
-    punt_returns = relationship('PuntReturns', backref='team_player_punt_returns')
-    kick_returns = relationship('KickReturns', backref='team_player_kick_returns')
+    punt_returns = relationship(
+        'PuntReturns', backref='team_player_punt_returns')
+    kick_returns = relationship(
+        'KickReturns', backref='team_player_kick_returns')
     kicks = relationship('Kicks', backref='team_player_kicks')
     punts = relationship('Punts', backref='team_player_punts')
 
