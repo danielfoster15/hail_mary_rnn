@@ -23,8 +23,11 @@ def get_career_stat_vector(Model, players):
         print("counter: ",counter)
         print(total_stats_dict, avg_stats_dict)    
 
-
+def print_team(Team):
+    team_players = session.query(Player).filter_by(team_id=Team).all()
+    return team_players
 if __name__ == '__main__':
 
-    players = retrieve_players(session)
-    get_career_stat_vector(Passing, players)
+    #players = retrieve_players(session)
+    #get_career_stat_vector(Passing, players)
+    print(session.query(Player).filter_by(last_name="Newton").first().first_name)

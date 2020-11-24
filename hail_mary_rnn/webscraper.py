@@ -37,7 +37,8 @@ def get_game_page(url):
 
 
 def get_row_value_where(df, out_col, where_col, s):
-    return df[out_col].where(df[where_col] == s).fillna(0).tolist()[0]
+    value = df[out_col].where(df[where_col] == s).dropna().tolist()[0]
+    return value
 
 
 def scrape_game_info(parsed_html):
@@ -62,7 +63,7 @@ def scrape_game_info(parsed_html):
     return title, game_info_df, box_score_df, date
 
 
-def parse_game_info(title, game_info_df, box_score_df, date, week):
+def parse_game_info(title, game_info_df, box_score_df, date, week, away_team_abbrev, home_team_abbrev):
     #teams and date
     date = datetime.strptime(date, "%A %b %d, %Y %I:%M%p")
     teams = title.split('-')[0]
@@ -71,12 +72,12 @@ def parse_game_info(title, game_info_df, box_score_df, date, week):
     home_nickname = home_team_fullname.split(' ')[-1].lower()
     home_city = ' '.join(home_team_fullname.split(' ')[:-1]).lower()
     home_team = get_or_create(
-        session, Team, nickname=home_nickname, city=home_city)
+        session, Team, nickname=home_nickname, city=home_city, abbrev=home_team_abbrev)
 
     away_nickname = away_team_fullname.split(' ')[-1].lower()
     away_city = ' '.join(away_team_fullname.split(' ')[:-1]).lower()
     away_team = get_or_create(
-        session, Team, nickname=away_nickname, city=away_city)
+        session, Team, nickname=away_nickname, city=away_city, abbrev=away_team_abbrev)
     game_info = {'home_team': home_team, 'away_team': away_team, 'date': date}
 
     # game info
@@ -199,7 +200,7 @@ def parse_game_info(title, game_info_df, box_score_df, date, week):
         game_info['home_ot2'] = home_OT2
         game_info['away_ot2'] = away_OT2
 
-    game_string = home_team_fullname+"_vs_"+away_team_fullname+"_week_" + \
+    game_info['game'] = home_team_fullname+"_vs_"+away_team_fullname+"_week_" + \
         str(game_info['week'])+"_"+date.strftime("%m%d%Y")
 
     game = get_or_create(session, Game, **game_info)
@@ -227,6 +228,7 @@ def get_player_stats_offense(row):
     fullname = row['player'].split(' ')
     first_name, last_name = split_name(fullname)
     id_num = str(row['id'])
+    team_abbrev = row['tm']
 
     passing = {"completions": row['cmp'], "attempts": row['att'], "yards": row['yds'],
                "touchdowns": row['td'], "interceptions": row['int'], "sacked": row['sk'], "sack_yards": row['yds1'], "longest": row['lng'], "qb_rating": row['rate']}
@@ -237,13 +239,14 @@ def get_player_stats_offense(row):
     receiving = {"targeted": row['tgt'], "receptions": row['rec'], "yards": row['yds3'],
                  "touchdowns": row['td2'], "longest": row['lng2']}
 
-    return first_name, last_name, passing, rushing, receiving, id_num
+    return first_name, last_name, team_abbrev, passing, rushing, receiving, id_num
 
 
 def get_player_stats_defense(row):
     fullname = row['player'].split(' ')
     first_name, last_name = split_name(fullname)
     id_num = str(row['id'])
+    team_abbrev = row['tm']
 
     secondary = {"interceptions": row['int'], "passes_defended": row['pd'],
                  "yards": row['yds'], "longest": row['lng'], "touchdowns": row['td']}
@@ -254,13 +257,14 @@ def get_player_stats_defense(row):
     fumbles = {"forced": row['ff'], "recovered": row['fr'],
                "touchdowns": row['td1'], "yards": row['yds1']}
 
-    return first_name, last_name, secondary, tackles, fumbles, id_num
+    return first_name, last_name, team_abbrev, secondary, tackles, fumbles, id_num
 
 
 def get_player_stats_kicking(row):
     fullname = row['player'].split(' ')
     first_name, last_name = split_name(fullname)
     id_num = str(row['id'])
+    team_abbrev = row['tm']
 
     kicks = {"extra_points_made": row['xpm'], "extra_point_attempts": row['xpa'],
              "fg_made": row['fgm'], "fg_attempts": row['fga']}
@@ -268,13 +272,14 @@ def get_player_stats_kicking(row):
     punts = {"punts": row['pnt'], "yards": row['yds'],
              "yards": row['yp'], "longest": row['lng']}
 
-    return first_name, last_name, kicks, punts, id_num
+    return first_name, last_name, team_abbrev, kicks, punts, id_num
 
 
 def get_player_stats_returns(row):
     fullname = row['player'].split(' ')
     first_name, last_name = split_name(fullname)
     id_num = str(row['id'])
+    team_abbrev = row['tm']
 
     kick_returns = {"returns": row['rt'], "yards": row['yds'],
                     "yards_per_return": row['yrt'], "longest": row['lng'], "touchdowns": row['td']}
@@ -282,7 +287,7 @@ def get_player_stats_returns(row):
     punt_returns = {"returns": row['ret'], "yards": row['yds1'],
                     "yards_per_return": row['yr'], "longest": row['lng1'], "touchdowns": row['td1']}
 
-    return first_name, last_name, kick_returns, punt_returns, id_num
+    return first_name, last_name, team_abbrev, kick_returns, punt_returns, id_num
 
 
 def read_table(parsed_html, div_id, extra_headers=False, table_in_comment=False, get_urls=False):
@@ -338,18 +343,23 @@ def scrape_player_stats(parsed_html):
 
 def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
     for index, row in offense_df.iterrows():
-        first_name, last_name, passing, rushing, receiving, id_num = get_player_stats_offense(
+        first_name, last_name, team_abbrev, passing, rushing, receiving, id_num = get_player_stats_offense(
             row)
         identifier = first_name+last_name+id_num
+        if game.home_team.abbrev == team_abbrev:
+            team = game.home_team
+        elif game.away_team.abbrev == team_abbrev:
+            team = game.away_team
+
         player = get_or_create(
             session, Player, first_name=first_name, last_name=last_name, identifier=identifier)
 
         player_rushing = Rushing(
-            **rushing, player_rushing=player, game_player_rushing=game)
+            **rushing, player_rushing=player, game_player_rushing=game, team_player_rushing=team)
         player_passing = Passing(
-            **passing, player_passing=player, game_player_passing=game)
+            **passing, player_passing=player, game_player_passing=game, team_player_passing=team)
         player_receiving = Receiving(
-            **receiving, player_receiving=player, game_player_receiving=game)
+            **receiving, player_receiving=player, game_player_receiving=game, team_player_receiving=team)
 
         session.add(player_rushing)
         session.add(player_passing)
@@ -357,18 +367,23 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
         session.commit()
 
     for index, row in defense_df.iterrows():
-        first_name, last_name, secondary, tackles, fumbles, id_num = get_player_stats_defense(
+        first_name, last_name, team_abbrev, secondary, tackles, fumbles, id_num = get_player_stats_defense(
             row)
         identifier = first_name+last_name+id_num
+        if game.home_team.abbrev == team_abbrev:
+            team = game.home_team
+        elif game.away_team.abbrev == team_abbrev:
+            team = game.away_team
+
         player = get_or_create(
             session, Player, first_name=first_name, last_name=last_name, identifier=identifier)
 
         player_secondary = Secondary(
-            **secondary, player_secondary=player, game_player_secondary=game)
+            **secondary, player_secondary=player, game_player_secondary=game, team_player_secondary=team)
         player_tackles = Tackles(
-            **tackles, player_tackles=player, game_player_tackles=game)
+            **tackles, player_tackles=player, game_player_tackles=game, team_player_tackles=team)
         player_fumbles = Fumbles(
-            **fumbles, player_fumbles=player, game_player_fumbles=game)
+            **fumbles, player_fumbles=player, game_player_fumbles=game, team_player_fumbles=team)
 
         session.add(player_secondary)
         session.add(player_tackles)
@@ -376,33 +391,41 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
         session.commit()
 
     for index, row in kicking_df.iterrows():
-        first_name, last_name, kicks, punts, id_num = get_player_stats_kicking(
+        first_name, last_name, team_abbrev, kicks, punts, id_num = get_player_stats_kicking(
             row)
         identifier = first_name+last_name+id_num
+        if game.home_team.abbrev == team_abbrev:
+            team = game.home_team
+        elif game.away_team.abbrev == team_abbrev:
+            team = game.away_team
         player = get_or_create(
             session, Player, first_name=first_name, last_name=last_name, identifier=identifier)
 
         player_kicks = Kicks(**kicks, player_kicks=player,
-                             game_player_kicks=game)
+                             game_player_kicks=game, team_player_kicks=team)
         player_punts = Punts(**punts, player_punts=player,
-                             game_player_punts=game)
+                             game_player_punts=game, team_player_punts=team)
 
         session.add(player_kicks)
         session.add(player_punts)
         session.commit()
     if returns_df is not None:
         for index, row in returns_df.iterrows():
-            first_name, last_name, kick_returns, punt_returns, id_num = get_player_stats_returns(
+            first_name, last_name, team_abbrev, kick_returns, punt_returns, id_num = get_player_stats_returns(
                 row)
 
             identifier = first_name+last_name+id_num
+            if game.home_team.abbrev == team_abbrev:
+                team = game.home_team
+            elif game.away_team.abbrev == team_abbrev:
+                team = game.away_team
             player = get_or_create(
                 session, Player, first_name=first_name, last_name=last_name, identifier=identifier)
 
             player_kick_returns = KickReturns(
-                **kick_returns, player_kick_returns=player, game_player_kick_returns=game)
+                **kick_returns, player_kick_returns=player, game_player_kick_returns=game, team_player_kick_returns=team)
             player_punt_returns = PuntReturns(
-                **punt_returns, player_punt_returns=player, game_player_punt_returns=game)
+                **punt_returns, player_punt_returns=player, game_player_punt_returns=game, team_player_punt_returns=team)
 
             session.add(player_kick_returns)
             session.add(player_punt_returns)
@@ -410,16 +433,17 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
 
 
 def scrape_team_stats(parsed_html):
-    offense = parsed_html.find(string=re.compile(r'id="team_stats"'))
-    df = pd.read_html(offense, header=None, flavor='bs4')[0]
-    df.columns = ["stat", "home", "away"]
-    return df
+    team_stats = parsed_html.find(string=re.compile(r'id="team_stats"'))
+    df = pd.read_html(team_stats, flavor='bs4')[0]
+    away_team_abbrev, home_team_abbrev = tuple(df.columns)[1:]
+    df.columns = ["stat", "away", "home"]
+
+    return df, away_team_abbrev, home_team_abbrev
 
 
-def parse_team_stats(team_df, home_team, away_team, game):
+def parse_team_stats(team_df, game):
     for team in ['home', 'away']:
         first_downs = get_row_value_where(team_df, team, 'stat', "First Downs")
-
         team_rush_stats = re.sub(r'--+', '-', get_row_value_where(
             team_df, team, 'stat', "Rush-Yds-TDs")).split('-')
 
@@ -439,7 +463,7 @@ def parse_team_stats(team_df, home_team, away_team, game):
             r'--+', '-', get_row_value_where(team_df, team, 'stat', "Fourth Down Conv.")).split('-')
 
         first_downs = get_row_value_where(team_df, team, 'stat', "First Downs")
-        turnovers = get_row_value_where(team_df, team, 'stat', "Turnovers")
+
         t = datetime.strptime(get_row_value_where(
             team_df, team, 'stat', "Time of Possession"), "%M:%S")
         possession = timedelta(minutes=t.minute, seconds=t.second)
@@ -452,11 +476,11 @@ def parse_team_stats(team_df, home_team, away_team, game):
 
         penalties, penalty_yds = tuple(team_penalties)
 
-        third_down_attempts, third_down_conv = turnovers = tuple(
+        third_down_attempts, third_down_conv = tuple(
             team_third_downs)
 
-        fourth_down_attempts, fourth_down_conv = turnovers = tuple(team_fourth_downs
-                                                                   )
+        fourth_down_attempts, fourth_down_conv = tuple(team_fourth_downs
+                                                       )
 
         passing = {"completions": completions, "attempts": attempts, "yards": pass_yds,
                    "touchdowns": pass_tds, "interceptions": interceptions, "sacked": sacks, "sack_yards": sack_yds}
@@ -472,9 +496,9 @@ def parse_team_stats(team_df, home_team, away_team, game):
                  "time_of_posession": possession}
 
         if team == 'home':
-            team = home_team
+            team = game.home_team
         else:
-            team = away_team
+            team = game.away_team
         # if session.query(Team).filter_by(nickname=team.nickname).first() == None:
         #     session.add(team)
 
@@ -500,31 +524,38 @@ def parse_team_stats(team_df, home_team, away_team, game):
 
 def process_page(url):
     parsed_html = get_game_page(url)
+    team_df, away_team_abbrev, home_team_abbrev = scrape_team_stats(
+        parsed_html)
     title, game_info_df, box_score_df, date = scrape_game_info(parsed_html)
-    game = parse_game_info(title, game_info_df, box_score_df, date, week)
+    game = parse_game_info(title, game_info_df, box_score_df,
+                           date, week, away_team_abbrev, home_team_abbrev)
     offense_df, defense_df, kicking_df, returns_df, positions_df = scrape_player_stats(
         parsed_html)
-    team_df = scrape_team_stats(parsed_html)
     parse_team_stats(
-        team_df, game.home_team, game.away_team, game)
+        team_df, game)
     parse_player_stats(
         offense_df, defense_df, kicking_df, returns_df, game)
 
 
 if __name__ == '__main__':
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    # Base.metadata.drop_all(bind=engine)
+    # Base.metadata.create_all(bind=engine)
 
     PLAYERS = {}
     TEAMS = {}
-    year_range = range(2000, 2020)
+    year_range = range(2010, 2021)
     week_range = range(1, 18)
     for year in year_range:
+        if year == 2020:
+            week_range = range(1, 12)
         for week in week_range:
             urls = get_all_game_urls(year, week)
+            game_num = 0
             for url, week in urls:
-                sleep(1)
+                #sleep(1)
                 print(url)
+                print("game_index: ", game_num)
+                game_num += 1
                 process_page(url)
 # get positions for players other than starters
 # build database

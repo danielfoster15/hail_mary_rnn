@@ -68,8 +68,6 @@ class Game(Base):
     over_under = Column('over_under', String)
     over_under_num = Column('over_under_num', Float)
     week = Column('week', Integer)
-
-
 # Player based objects
 
 
@@ -101,6 +99,7 @@ class Passing(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     completions = Column('completions', Integer)
     attempts = Column('attempts', Integer)
     yards = Column('yards', Integer)
@@ -122,6 +121,7 @@ class Rushing(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     attempts = Column('attempts', Integer)
     yards = Column('yards', Integer)
     touchdowns = Column('touchdowns', Integer)
@@ -135,6 +135,7 @@ class Receiving(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     receptions = Column('receptions', Integer)
     targeted = Column('targeted', Integer)
     yards = Column('yards', Integer)
@@ -149,6 +150,7 @@ class Secondary(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     interceptions = Column('interceptions', Integer)
     passes_defended = Column('passes_defended', Integer)
     yards = Column('yards', Integer)
@@ -163,6 +165,7 @@ class Tackles(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     sacks = Column('sacks', Integer)
     combined = Column('combined', Integer)
     solo = Column('solo', Integer)
@@ -178,6 +181,7 @@ class Fumbles(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     forced = Column('forced', Integer)
     recovered = Column('recovered', Integer)
     yards = Column('yards', Integer)
@@ -194,6 +198,7 @@ class PuntReturns(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     returns = Column('returns', Integer)
     yards = Column('yards', Integer)
     yards_per_return = Column('yards_per_return', Integer)
@@ -208,6 +213,7 @@ class KickReturns(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     returns = Column('returns', Integer)
     yards = Column('yards', Integer)
     yards_per_return = Column('yards_per_return', Integer)
@@ -222,6 +228,7 @@ class Kicks(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     extra_point_attempts = Column('extra_point_attempts', Integer)
     extra_points_made = Column('extra_points_made', Integer)
     fg_attempts = Column('fg_attempts', Integer)
@@ -235,6 +242,7 @@ class Punts(Base):
     id = Column('id', Integer, primary_key=True)
     player_id = Column(Integer, ForeignKey('player.id'))
     game_id = Column(Integer, ForeignKey('game.id'))
+    team_id = Column(Integer, ForeignKey('team.id'))
     punts = Column('punts', Integer)
     yards = Column('yards', Integer)
     longest = Column('longest', Integer)
@@ -249,13 +257,26 @@ class Team(Base):
     id = Column('id', Integer, primary_key=True)
     nickname = Column('nickname', String)
     city = Column('city', String)
+    abbrev = Column('abbrev', String)
 
     # relationships
+    # team stats to team
     team_passing = relationship('TeamPassing', backref='team_passing')
     team_rushing = relationship('TeamRushing', backref='team_rushing')
     team_fumbles = relationship('TeamFumbles', backref='team_fumbles')
     penalties = relationship('Penalties', backref='team_penalties')
     downs = relationship('Downs', backref='team_downs')
+    # player stats to team
+    passing = relationship('Passing', backref='team_player_passing')
+    rushing = relationship('Rushing', backref='team_player_rushing')
+    receiving = relationship('Receiving', backref='team_player_receiving')
+    secondary = relationship('Secondary', backref='team_player_secondary')
+    tackles = relationship('Tackles', backref='team_player_tackles')
+    fumbles = relationship('Fumbles', backref='team_player_fumbles')
+    punt_returns = relationship('PuntReturns', backref='team_player_punt_returns')
+    kick_returns = relationship('KickReturns', backref='team_player_kick_returns')
+    kicks = relationship('Kicks', backref='team_player_kicks')
+    punts = relationship('Punts', backref='team_player_punts')
 
 
 class TeamPassing(Base):
