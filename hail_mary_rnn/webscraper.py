@@ -168,7 +168,7 @@ def parse_game_info(title, game_info_df, box_score_df, date, week, away_team_abb
         box_score_df, '4', 'Unnamed: 1',  away_team_fullname))
 
     home_final = int(get_row_value_where(
-        box_score_df, 'Final', 'Unnamed: 1',  away_team_fullname))
+        box_score_df, 'Final', 'Unnamed: 1',  home_team_fullname))
     away_final = int(get_row_value_where(
         box_score_df, 'Final', 'Unnamed: 1',  away_team_fullname))
 
