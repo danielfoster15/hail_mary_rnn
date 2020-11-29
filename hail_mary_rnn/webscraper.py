@@ -538,12 +538,12 @@ def process_page(url):
 
 
 if __name__ == '__main__':
-    # Base.metadata.drop_all(bind=engine)
-    # Base.metadata.create_all(bind=engine)
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
 
     PLAYERS = {}
     TEAMS = {}
-    year_range = range(2010, 2021)
+    year_range = range(2000, 2021)
     week_range = range(1, 18)
     for year in year_range:
         if year == 2020:
