@@ -14,7 +14,7 @@ HEADERS = {
     'user-agent': 'Daniel Foster/daniel.a.foster@gmail.com/Doing a home project'}
 
 
-def get_all_game_urls(year, week_range):
+def get_all_game_urls(year, week, link_text):
     url_base = 'https://www.pro-football-reference.com'
     links = []
 
@@ -23,7 +23,7 @@ def get_all_game_urls(year, week_range):
                        '/week_'+str(week)+'.htm', headers=HEADERS)
     soup = BeautifulSoup(res.text, "html.parser")
     for a in soup.find_all('a'):
-        if a.text == "Final":
+        if a.text == link_text:
             links.append((url_base+a['href'], week))
             print("got url: "+url_base+a['href'])
     return links
@@ -290,11 +290,20 @@ def get_player_stats_returns(row):
     return first_name, last_name, team_abbrev, kick_returns, punt_returns, id_num
 
 
-def read_table(parsed_html, div_id, extra_headers=False, table_in_comment=False, get_urls=False):
+def read_table(parsed_html, div_id, extra_headers=False, table_in_comment=False, comment_out_of_div=False, get_urls=False, clean_column_names=True):
     if table_in_comment:
-        div = parsed_html.find(id=div_id)
-        comment = div.find(text=lambda text: isinstance(text, Comment))
-        table = BeautifulSoup(comment, "html.parser")
+        if comment_out_of_div:
+            comments = parsed_html.find_all(text=lambda text: isinstance(text,Comment))
+            for comment in comments:
+                table = BeautifulSoup(comment, "html.parser")
+                div = table.find(id=div_id)
+                if div is not None:
+                    table = div.find('table')
+                    break
+        else:    
+            div = parsed_html.find(id=div_id)
+            comment = div.find(text=lambda text: isinstance(text, Comment))
+            table = BeautifulSoup(comment, "html.parser")
     else:
         table = parsed_html.find(id=div_id)
     if extra_headers:
@@ -305,9 +314,10 @@ def read_table(parsed_html, div_id, extra_headers=False, table_in_comment=False,
     df = pd.read_html(table.prettify(), header=0, flavor='bs4')[0]
     df.columns = df.columns.str.replace(
         re.compile(r'\W'), '').str.lower()
-    df['id'] = [re.sub('\D', '', a['href'])
-                for a in table.find_all('a')]
-    df.fillna(0, inplace=True)
+    if clean_column_names:
+        df['id'] = [re.sub('\D', '', a['href'])
+                    for a in table.find_all('a')]
+        df.fillna(0, inplace=True)
     if get_urls:
         df['url'] = [a['href'] for a in table.find_all('a')]
 
@@ -549,7 +559,7 @@ if __name__ == '__main__':
         if year == 2020:
             week_range = range(1, 12)
         for week in week_range:
-            urls = get_all_game_urls(year, week)
+            urls = get_all_game_urls(year, week, "Final")
             game_num = 0
             for url, week in urls:
                 #sleep(1)

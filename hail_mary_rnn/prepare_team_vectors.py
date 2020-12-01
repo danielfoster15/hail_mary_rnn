@@ -12,7 +12,7 @@ def load_vectors_to_dict(file):
             vector_dict[player_id] = np.array(vector, dtype=np.float)
     return vector_dict
 
-def get_team_vectors(Game, vector_dict):
+def get_team_vectors(Game, vector_dict, injuries=None, prediction_team_id=None):
     stat_models = [Passing, Rushing, Receiving, Secondary,
                    Tackles, Fumbles, KickReturns, PuntReturns, Punts, Kicks]
     home_players = []
@@ -29,24 +29,61 @@ def get_team_vectors(Game, vector_dict):
             if stat_model.player_id not in away_players:
                 away_players.append(stat_model.player_id)
 
-    for player in away_players:
-        away_player_vectors.append(vector_dict[str(player)])
+    if prediction_team_id:
+        if prediction_team_id == Game.home_id:
+            for player in home_players:
+                player_obj = session.query(Player).filter_by(id=player).first()
+                player_name = player_obj.first_name+' '+player_obj.last_name
+                if player_name in injuries['Player'].tolist():
+                    print('injured player: ', player_name)
+                    if injuries[injuries['Player']==player_name]['Class'].to_string()  != 'probable':
+                        pass
+                else:
+                    home_player_vectors.append(vector_dict[str(player)])
+            home_team_vector = np.stack(home_player_vectors)
+            if len(home_player_vectors) < 48:
+                for i in range(len(home_player_vectors), 48):
+                    home_player_vectors.append(np.zeros(41))
+            return home_team_vector, None
+        elif prediction_team_id == Game.away_id:
+            for player in away_players:
+                player_obj = session.query(Player).filter_by(id=player).first()
+                player_name = player_obj.first_name+' '+player_obj.last_name
+                if player_name in injuries['Player'].tolist():
+                    print('injured player: ', player_name)
+                    if injuries[injuries['Player']==player_name]['Class'].to_string() != 'probable':
+                        pass
+                else:
+                    away_player_vectors.append(vector_dict[str(player)])
+            away_team_vector = np.stack(away_player_vectors)
 
-    for player in home_players:
-        home_player_vectors.append(vector_dict[str(player)])
+            if len(away_player_vectors) < 48:
+                for i in range(len(away_player_vectors), 48):
+                    away_player_vectors.append(np.zeros(41))
+        
 
-    if len(away_player_vectors) < 48:
-        for i in range(len(away_player_vectors), 48):
-            away_player_vectors.append(np.zeros(41))
-    
-    if len(home_player_vectors) < 48:
-        for i in range(len(home_player_vectors), 48):
-            home_player_vectors.append(np.zeros(41))
+            return None, away_team_vector     
 
-    away_team_vector = np.stack(away_player_vectors)
-    home_team_vector = np.stack(home_player_vectors)
-    
-    return home_team_vector, away_team_vector
+
+    else:
+        for player in away_players:
+            away_player_vectors.append(vector_dict[str(player)])
+
+        for player in home_players:
+            home_player_vectors.append(vector_dict[str(player)])
+
+        if len(away_player_vectors) < 48:
+            for i in range(len(away_player_vectors), 48):
+                away_player_vectors.append(np.zeros(41))
+        
+        if len(home_player_vectors) < 48:
+            for i in range(len(home_player_vectors), 48):
+                home_player_vectors.append(np.zeros(41))
+
+        away_team_vector = np.stack(away_player_vectors)
+        home_team_vector = np.stack(home_player_vectors)
+        
+        return home_team_vector, away_team_vector
 
 def get_game_vectors_and_scores(games, vector_dict):
     vectors_by_game = []
