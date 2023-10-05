@@ -1,6 +1,6 @@
 import os
 import re
-import sys
+from io import StringIO
 import requests
 import pandas as pd
 from get_or_create import get_or_create
@@ -45,14 +45,14 @@ def scrape_game_info(parsed_html):
     title = parsed_html.find('title').get_text().split('|')[0]
 
     game_info_div = parsed_html.find(id="all_game_info")
-    comment = game_info_div.find(text=lambda text: isinstance(text, Comment))
+    comment = game_info_div.find(string=lambda text: isinstance(text, Comment))
     game_info = BeautifulSoup(comment, "html.parser")
     game_info_df = pd.read_html(
-        game_info.prettify(), header=0, flavor='bs4')[0]
+        StringIO(game_info.prettify()), header=0, flavor='bs4')[0]
 
     box_score = parsed_html.find(
         'div', {"class": "linescore_wrap"}).find('table').prettify()
-    box_score_df = pd.read_html(box_score)[0]
+    box_score_df = pd.read_html(StringIO(box_score))[0]
 
     info = parsed_html.find('div', {'class': 'scorebox_meta'})
     info_divs = info.find_all('div')
@@ -293,7 +293,7 @@ def get_player_stats_returns(row):
 def read_table(parsed_html, div_id, extra_headers=False, table_in_comment=False, comment_out_of_div=False, get_urls=False, clean_column_names=True):
     if table_in_comment:
         if comment_out_of_div:
-            comments = parsed_html.find_all(text=lambda text: isinstance(text,Comment))
+            comments = parsed_html.find_all(string=lambda text: isinstance(text,Comment))
             for comment in comments:
                 table = BeautifulSoup(comment, "html.parser")
                 div = table.find(id=div_id)
@@ -302,7 +302,7 @@ def read_table(parsed_html, div_id, extra_headers=False, table_in_comment=False,
                     break
         else:    
             div = parsed_html.find(id=div_id)
-            comment = div.find(text=lambda text: isinstance(text, Comment))
+            comment = div.find(string=lambda text: isinstance(text, Comment))
             table = BeautifulSoup(comment, "html.parser")
     else:
         table = parsed_html.find(id=div_id)
@@ -311,9 +311,9 @@ def read_table(parsed_html, div_id, extra_headers=False, table_in_comment=False,
             remove_extra_table_headers(table)
         except:
             pass
-    df = pd.read_html(table.prettify(), header=0, flavor='bs4')[0]
+    df = pd.read_html(StringIO(table.prettify()), header=0, flavor='bs4')[0]
     df.columns = df.columns.str.replace(
-        re.compile(r'\W'), '').str.lower()
+        re.compile(r'\W'), '', regex=True).str.lower()
     if clean_column_names:
         df['id'] = [re.sub('\D', '', a['href'])
                     for a in table.find_all('a')]
@@ -444,7 +444,7 @@ def parse_player_stats(offense_df, defense_df, kicking_df, returns_df, game):
 
 def scrape_team_stats(parsed_html):
     team_stats = parsed_html.find(string=re.compile(r'id="team_stats"'))
-    df = pd.read_html(team_stats, flavor='bs4')[0]
+    df = pd.read_html(StringIO(team_stats), flavor='bs4')[0]
     away_team_abbrev, home_team_abbrev = tuple(df.columns)[1:]
     df.columns = ["stat", "away", "home"]
 
@@ -553,16 +553,14 @@ if __name__ == '__main__':
 
     PLAYERS = {}
     TEAMS = {}
-    year_range = range(2000, 2021)
+    year_range = range(2000, 2023)
     week_range = range(1, 18)
     for year in year_range:
-        if year == 2020:
-            week_range = range(1, 12)
         for week in week_range:
             urls = get_all_game_urls(year, week, "Final")
             game_num = 0
             for url, week in urls:
-                #sleep(1)
+                sleep(3)
                 print(url)
                 print("game_index: ", game_num)
                 game_num += 1
