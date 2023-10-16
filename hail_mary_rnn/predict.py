@@ -104,7 +104,7 @@ if __name__ == '__main__':
             url, 11, datetime(2020, 1, 1), vector_dict)
 
         prediction_vector = np.sum(prediction_team_vector, axis=0) - np.sum(prediction_opponent_vector, axis=0)
-        prediction_vector = prediction_vector.reshape(1,41)
+        prediction_vector = prediction_vector.reshape(1,42)
         prediction = model.predict(prediction_vector)
         max_index_row = np.argmax(prediction, axis=1)[0]
         if max_index_row == 0:

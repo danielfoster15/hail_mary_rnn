@@ -11,21 +11,6 @@ from keras.callbacks import ModelCheckpoint
 # split a univariate sequence into samples
 
 
-def split_sequence(sequence, n_steps):
-    X, y = list(), list()
-    for i in range(len(sequence)):
-        # find the end of this pattern
-        end_ix = i + n_steps
-        # check if we are beyond the sequence
-        if end_ix > len(sequence)-1:
-            break
-        # gather input and output parts of the pattern
-        seq_x, seq_y = sequence[i:end_ix], sequence[end_ix]
-        X.append(seq_x)
-        y.append(seq_y)
-    return array(X), array(y)
-
-
 def get_game_sequences_for_teams(games, teams, vector_dict):
     # X is input, a sequence of 3 games
     X, y = list(), list()
@@ -49,7 +34,9 @@ def get_game_sequences_for_teams(games, teams, vector_dict):
 
 def split_and_shuffle_train_test(X, y, ratio):
     split = int(len(X) * ratio)
+    print(len(X), split)
     val = int(len(X[split:])/2)
+    print(len(X), split, val)
     x_y = list(zip(X,y))
     random.seed(4)
     random.shuffle(x_y)
@@ -62,17 +49,17 @@ def split_and_shuffle_train_test(X, y, ratio):
     shuffled_y = np.array(shuffled_y)
     X_train = shuffled_X[:split]
     y_train = shuffled_y[:split]
-    X_test = shuffled_X[split:val]
-    y_test = shuffled_y[split:val]
-    X_val = shuffled_X[val:]
-    y_val = shuffled_y[val:]
+    X_test = shuffled_X[split:split+val]
+    y_test = shuffled_y[split:split+val]
+    X_val = shuffled_X[split+val:]
+    y_val = shuffled_y[split+val:]
     return X_train, y_train, X_test, y_test, X_val, y_val
 
 
 if __name__ == '__main__':
     games = session.query(Game).all()
     print('got games')
-    vector_dict = load_vectors_to_dict('resources/player_vectors.txt')
+    vector_dict = load_vectors_to_dict('resources/normal_vectors_ids.txt')
     teams = session.query(Team).all()
     print('got teams')
     print('getting vectors...')
@@ -80,13 +67,13 @@ if __name__ == '__main__':
     print('got vectors')
     X_train, y_train, X_test, y_test, X_val, y_val = split_and_shuffle_train_test(X, y, .8)
     model = Sequential()
-    model.add(Dense(12, input_dim=41, activation='relu'))
+    model.add(Dense(12, input_dim=42, activation='relu'))
     model.add(Dense(8, activation='relu'))
     model.add(Dense(3, activation='softmax'))
     model.compile(loss='categorical_crossentropy',
                   optimizer='adam', metrics=['accuracy'])
     model.summary()
-    filepath = "model-files/best_model.{epoch:02d}-{loss:.2f}.h5"
+    filepath = "model-files/best_model.normalvecs.{epoch:02d}-{loss:.2f}.h5"
     es = EarlyStopping(monitor='loss', patience=500, verbose=1, mode='min')
     mc = ModelCheckpoint(filepath, save_best_only=True,
                          monitor='loss', mode='min', verbose=1)
