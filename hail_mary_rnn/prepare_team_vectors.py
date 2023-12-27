@@ -1,9 +1,10 @@
 from database import *
 from models import *
+from sqlalchemy import and_
 import numpy as np
-import re
+import time
 from sklearn import preprocessing
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 MODEL_LIST = [
     (Passing, 8),
@@ -49,18 +50,23 @@ def normalize_vector(career_stats):
 
 def get_career_stats_up_to_date(player, game_instance, model_list=MODEL_LIST):
     career_stats = OrderedDict()
-    game_ids = []
+    game_ids = set()
+    filtered_games = [
+        game.id
+        for game in session.query(Game).filter(Game.date < game_instance.date).all()
+    ]
     for model_instance, features in model_list:
         model_keys = [
             model_instance.__tablename__ + "_" + k
             for k in list(model_instance.get_stats(model_instance).keys())
         ]
+        total_stats_dict = {k: 0 for k in model_keys}
         # total number of unique game_ids where this player_id appears
         # Get stats filtered by date
         all_stats = (
             session.query(model_instance)
-            .filter_by(player_id=player)
-            .filter(Game.date < game_instance.date)  # Apply the date filter
+            .filter(model_instance.game_id.in_(filtered_games))
+            .filter(model_instance.player_id == player)
             .all()
         )
 
@@ -68,21 +74,20 @@ def get_career_stats_up_to_date(player, game_instance, model_list=MODEL_LIST):
             for i in range(0, features):
                 career_stats[model_keys[i]] = 0
         else:
-            total_stats_dict = all_stats[0].get_stats()
             # building the career stats dictionary
             for stat in all_stats:
-                game_id = stat.game_id
-                if game_id not in game_ids:
-                    game_ids.append(game_id)
-                for key, value in stat.get_stats().items():
-                    total_stats_dict[key] += value
+                game_ids.add(stat.game_id)
+                stats = stat.get_stats()
+                for key, value in stats.items():
+                    total_stats_dict[f"{model_instance.__tablename__}_{key}"] += value
+
             # normalizing some values in the career stats dictionary and adding to career_stats
             for key, value in total_stats_dict.items():
-                if key == "yards":
-                    value = value / 100
-                if key == "qb_rating":
-                    value = value / 158.3
-                career_stats[model_instance.__tablename__ + "_" + key] = value
+                if "yards" in key:
+                    value /= 100
+                elif "qb_rating" in key:
+                    value /= 158.3
+                career_stats[key] = value
     career_stats["game_count"] = len(game_ids)
 
     return career_stats
@@ -101,29 +106,22 @@ def get_team_vectors(team, game_instance):
         Punts,
         Kicks,
     ]
-    players = []
+    players = {}
     player_vectors = []
-
     for stat_instance in stat_models:
-        for stat_model in (
+        stats = (
             session.query(stat_instance)
             .filter_by(game_id=game_instance.id, team_id=team)
             .all()
-        ):
-            if stat_model.player_id not in players:
-                players.append(stat_model.player_id)
-
-        for player in players:
-            # call function here
-            player_vectors.append(
-                normalize_vector(
-                    get_career_stats_up_to_date(str(player), game_instance)
-                )
-            )
-
-        if len(player_vectors) < 48:
-            for i in range(len(player_vectors), 48):
-                player_vectors.append(np.zeros(42))
+        )
+        for stat_model in stats:
+            players[stat_model.player_id] = []
+    for player in players:
+        player_vectors.append(
+            normalize_vector(get_career_stats_up_to_date(str(player), game_instance))
+        )
+    while len(player_vectors) < 48:
+        player_vectors.append(np.zeros(42))
     team_vector = preprocessing.scale(np.stack(player_vectors))
 
     return team_vector
@@ -136,34 +134,22 @@ def get_home_away_vector(game_instance):
     away_team_vector = get_team_vectors(away_id, game_instance)
     home_team_vector = get_team_vectors(home_id, game_instance)
 
-    return away_team_vector, home_team_vector
+    return np.sum(away_team_vector, axis=0), np.sum(home_team_vector, axis=0)
 
 
-def get_game_vectors_and_scores(games):
-    vectors_by_game = []
+def get_game_vectors(games):
+    game_vectors = {}
     for game in games:
+        print(game.game)
+        start = time.time()
         away_team_vector, home_team_vector = get_home_away_vector(game)
-        vectors_by_game.append((away_team_vector, home_team_vector, game))
-    return vectors_by_game
+        end = time.time()
+        print(f"getvectors execution time: {end - start} seconds")
 
-
-def get_vector_by_team_and_game(games, team_instance):
-    vectors_and_scores_by_game_and_team = []
-    for game in games:
-        ids = game.home_id, game.away_id
-        if team_instance.id in ids:
-            away_team_vector, home_team_vector = get_home_away_vector(game)
-            if team_instance.id == game.home_id:
-                team_vector, opponent_vector = home_team_vector, away_team_vector
-                team_score = game.home_final
-                opponent_score = game.away_final
-
-            elif team_instance.id == game.away_id:
-                opponent_vector, team_vector = home_team_vector, away_team_vector
-                team_score = game.away_final
-                opponent_score = game.home_final
-
-            vectors_and_scores_by_game_and_team.append(
-                (team_vector, opponent_vector, team_score, opponent_score, game.date)
-            )
-    return vectors_and_scores_by_game_and_team
+        game_vectors[game.game] = (
+            away_team_vector.tolist(),
+            home_team_vector.tolist(),
+            game.away_final,
+            game.home_final,
+        )
+    return game_vectors
